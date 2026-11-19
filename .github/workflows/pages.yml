@@ -1,7 +1,7 @@
 name: Deploy to GitHub Pages
 
-# site/ is the built web version, published as it is; the game files exist on the release only
-# when the operator chose to publish them (tools/deploy.sh with PUBLISH_PACK=1)
+# site/ is the built web version, published as it is; game.bin is over git's 100 MB limit, so it stays on the
+# latest release with game.meta.json and start.pack.json and is copied beside the page here (same origin, no cors)
 on:
   push:
     branches: [main]
@@ -25,14 +25,14 @@ jobs:
       - name: Check out
         uses: actions/checkout@v5
 
-      - name: Fetch the game pack from the latest release, when published
+      - name: Fetch game.bin from the latest release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
           [ -n "$tag" ] || exit 0
-          for name in game.meta.json start.pack.json th10.dat thbgm.dat; do
+          for name in game.bin game.meta.json start.pack.json; do
             gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$name" --output "site/$name" \
               && echo "$name from $tag: $(stat -c %s "site/$name") bytes" || true
           done
