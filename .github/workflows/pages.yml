@@ -1,0 +1,55 @@
+name: Deploy to GitHub Pages
+
+# site/ is the built web version, published as it is; the game files exist on the release only
+# when the operator chose to publish them (tools/deploy.sh with PUBLISH_PACK=1)
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Package the site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Fetch the game pack from the latest release, when published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
+          [ -n "$tag" ] || exit 0
+          for name in game.meta.json start.pack.json th10.dat thbgm.dat; do
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$name" --output "site/$name" \
+              && echo "$name from $tag: $(stat -c %s "site/$name") bytes" || true
+          done
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./site
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
